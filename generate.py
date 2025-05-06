@@ -14,10 +14,12 @@ from config import TELEGRAM_TOKEN, AI_TOKEN, FUSION_BRAIN_API_KEY, FUSION_BRAIN_
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
+# Инициализация клиента OpenAI с правильными заголовками аутентификации
 ai_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=AI_TOKEN,
     default_headers={
+        "Authorization": f"Bearer {AI_TOKEN}",
         "HTTP-Referer": "https://github.com/yourusername/school-helper-bot",
         "X-Title": "School Quiz Bot",
     }
@@ -185,7 +187,9 @@ def generate_ai_question(grade, subject, max_attempts=5):
                 return question_data
 
         except Exception as e:
-            print(f"Question generation error: {e}")
+            print(f"Question generation error (attempt {attempt + 1}): {e}")
+            if attempt == max_attempts - 1:
+                return None
 
         time.sleep(1)
     return None
@@ -232,8 +236,8 @@ def generate_recommendations(topic):
         recommendations = response.choices[0].message.content.strip()
         if '_' in recommendations and len(recommendations.split('_')) == 2:
             return recommendations
-    except:
-        pass
+    except Exception as e:
+        print(f"Recommendation generation error: {e}")
     return "узнать больше по этой теме_изучить смежные темы"
 
 
@@ -242,8 +246,8 @@ def send_welcome(message):
     try:
         with open('hello.jpeg', 'rb') as photo:
             bot.send_photo(message.chat.id, photo)
-    except:
-        pass
+    except Exception as e:
+        print(f"Error sending photo: {e}")
 
     text = format_text("""
     👋 Привет! Я - твой школьный ИИ помощник
@@ -269,8 +273,8 @@ def about_bot(message):
     try:
         with open('info.jpeg', 'rb') as photo:
             bot.send_photo(message.chat.id, photo)
-    except:
-        pass
+    except Exception as e:
+        print(f"Error sending photo: {e}")
 
     text = format_text("""
     🤖 Школьный помощник
@@ -407,10 +411,8 @@ def handle_recommendation(message, subject, grade, prev_recommendations=None):
         return send_welcome(message)
 
     if message.text in prev_recommendations:
-        # Если выбрана одна из предыдущих рекомендаций, просто объясняем ее
         topic = message.text
     else:
-        # Иначе генерируем новые рекомендации на основе выбора пользователя
         topic = message.text
         recommendations = generate_recommendations(topic)
         rec1, rec2 = recommendations.split('_')
@@ -440,9 +442,8 @@ def handle_recommendation(message, subject, grade, prev_recommendations=None):
         else:
             bot.send_message(message.chat.id, explanation, parse_mode='HTML')
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
+        bot.send_message(message.chat.id, f"❌ Ошибка при генерации объяснения: {str(e)}")
 
-    # После объяснения снова предлагаем рекомендации
     recommendations = generate_recommendations(topic)
     rec1, rec2 = recommendations.split('_')
 
@@ -457,7 +458,6 @@ def handle_recommendation(message, subject, grade, prev_recommendations=None):
         reply_markup=markup
     )
 
-    # Регистрируем следующий шаг с обновленными рекомендациями
     bot.register_next_step_handler(
         message,
         handle_recommendation,
@@ -529,7 +529,7 @@ def explain_topic(message):
         )
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
+        bot.send_message(message.chat.id, f"❌ Ошибка при генерации объяснения: {str(e)}")
         send_welcome(message)
 
 
